@@ -1,41 +1,36 @@
-var createError = require('http-errors');
-var express = require('express');
-var path = require('path');
-var cookieParser = require('cookie-parser');
-var logger = require('morgan');
+//import express 和 ws 套件
+const express = require("express");
+const SocketServer = require("ws").Server;
+const PORT = 3000; //指定 port
 
-var indexRouter = require('./routes/index');
-var usersRouter = require('./routes/users');
-
-var app = express();
-
-// view engine setup
-app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'ejs');
-
-app.use(logger('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
-
-app.use('/', indexRouter);
-app.use('/users', usersRouter);
-
-// catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  next(createError(404));
+//創建 express 物件，綁定監聽  port , 設定開啟後在 console 中提示
+const server = express().listen(PORT, () => {
+  console.log(`Listening on ${PORT}`);
 });
 
-// error handler
-app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
+//將 express 交給 SocketServer 開啟 WebSocket 的服務
+const wss = new SocketServer({ server });
+//當有 client 連線成功時
+wss.on("connection", (ws) => {
+  console.log("Client connected");
+  ws.send("Server: Hi there, I am a WebSocket server"); //發送數據給 client
+  // 當收到client消息時
+  ws.on("message", (data) => {
+    // 收回來是 Buffer 格式、需轉成字串
+    data = data.toString();
+    console.log(data); // 可在 terminal 看收到的訊息
 
-  // render the error page
-  res.status(err.status || 500);
-  res.render('error');
+    /// 發送消息給client
+    ws.send(data);
+
+    /// 發送給所有client：
+    let clients = wss.clients; //取得所有連接中的 client
+    clients.forEach((client) => {
+      client.send(data); // 發送至每個 client
+    });
+  });
+  // 當連線關閉
+  ws.on("close", () => {
+    console.log("Close connected");
+  });
 });
-
-module.exports = app;
